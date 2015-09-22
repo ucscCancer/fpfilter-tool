@@ -5,6 +5,9 @@ use strict;
 
 use Getopt::Long;
 use IO::File;
+use File::Temp qw( tempdir );
+use File::Spec;
+use Cwd qw( abs_path cwd);
 
 ## Define filtering parameters ##
 
@@ -30,6 +33,7 @@ my $output_basename;
 my $vcf_file;
 my $output_file;
 my $bam_file;
+my $bam_index;
 my $sample;
 my $bam_readcount_path = 'bam-readcount';
 my $ref_fasta;
@@ -42,6 +46,7 @@ my @params = @ARGV;
 $opt_result = GetOptions(
     'vcf-file=s' => \$vcf_file,
     'bam-file=s' => \$bam_file,
+    'bam-index=s' => \$bam_index,
     'sample=s' => \$sample,
     'bam-readcount=s' => \$bam_readcount_path,
     'reference=s' => \$ref_fasta,
@@ -85,10 +90,27 @@ unless(-s $ref_fasta) {
     die "Can not find valid reference fasta: $ref_fasta\n";
 }
 
+unless($bam_file) {
+    die "You must provide a BAM file for generating readcounts\n";
+    die help_text();
+}
+
+unless(-s $bam_file) {
+    die "Can not find valid BAM file: $bam_file\n";
+}
+
+if($bam_index && !-s $bam_index) {
+    die "Can not find valid BAM index file: $bam_index\n";
+}
+
 unless($output_file) {
     warn "You must provide an output file name: $output_file\n";
     die help_text();
 }
+else {
+    $output_file = abs_path($output_file); #make sure we have full path as manipulating cwd below
+}
+
 unless($sample) {
     warn "You must provide a sample name\n";
     die help_text();
@@ -112,6 +134,11 @@ my @vcf_lines;
 
 my %rc_for_snp; # store info on snp positions and VCF line
 my %rc_for_indel; #store info on indel positions and VCF line
+
+my ($workdir, $working_fasta, $working_bam) = setup_workdir($ref_fasta, $bam_file, $bam_index);
+
+my $starting_dir = cwd();
+chdir $workdir or die "Unable to change to working directory\n";
 
 my $input = IO::File->new($vcf_file) or die "Unable to open input file $vcf_file: $!\n";
 $vcf_header = parse_vcf_header($input);
@@ -178,14 +205,14 @@ while(my $entry = $input->getline) {
 }
 
 if(%rc_for_snp) {
-    filter_sites_in_hash(\%rc_for_snp, $bam_readcount_path, $bam_file, $ref_fasta);
+    filter_sites_in_hash(\%rc_for_snp, $bam_readcount_path, $working_bam, $working_fasta);
 }
 else {
     print STDERR "No SNP sites identified\n";
 }
 
 if(%rc_for_indel) {
-    filter_sites_in_hash(\%rc_for_indel, $bam_readcount_path, $bam_file, $ref_fasta, '-i');
+    filter_sites_in_hash(\%rc_for_indel, $bam_readcount_path, $working_bam, $working_fasta, '-i');
 }
 else {
     print STDERR "No Indel sites identified\n";
@@ -195,6 +222,8 @@ else {
 my $filtered_vcf = IO::File->new("$output_file","w") or die "Can't open output file $output_file: $!\n";
 print $filtered_vcf @$vcf_header;
 print $filtered_vcf @vcf_lines;
+
+chdir $starting_dir or die "Unable to go back to starting dir\n";
 exit(0);
 
 ################################################################################
@@ -510,3 +539,40 @@ sub filter_sites_in_hash {
         die "Error running bam-readcount\n";
     }
 }
+
+sub setup_workdir {
+    my ($reference, $bam_file, $bam_index) = @_;
+    $reference = abs_path($reference);
+    $bam_file = abs_path($bam_file);
+    $bam_index = abs_path($bam_index) if $bam_index;
+
+    my $dir = File::Temp->newdir('fpfilterXXXXX', TMPDIR => 1, CLEANUP => 1) or 
+        die "Unable to create working directory\n";
+
+    #symlink in necessary files to run
+    my $working_reference =  File::Spec->catfile($dir, "reference.fa");
+    symlink $reference, $working_reference;
+
+    my $fa_index = $reference . ".fai";
+    unless(-e $fa_index) {
+        # do reference indexing
+    }
+    else {
+        symlink $fa_index, File::Spec->catfile($dir, "reference.fa.fai");
+    }
+
+    my $working_bam = File::Spec->catfile($dir, "tumor.bam");
+    my $working_bam_index = File::Spec->catfile($dir, "tumor.bam.bai");
+    symlink $bam_file, $working_bam;
+    if($bam_index) {
+        symlink $bam_index, $working_bam_index;
+    }
+    elsif(-e $bam_file . ".bai") {
+        symlink $bam_file . ".bai", $working_bam_index;
+    }
+    else {
+        # index bam file
+    }
+    return ($dir, $working_reference, $working_bam);
+}
+
