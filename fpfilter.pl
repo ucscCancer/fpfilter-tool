@@ -248,7 +248,7 @@ OPTIONS
 --vcf-file              the input VCF file. Must have a GT field.
 --bam-file              the BAM file of the sample you are filtering on. Typically the tumor.
 --sample                the sample name of the sample you want to filter on in the VCF file.
---reference-sequence    a fasta containing the reference sequence the BAM file was aligned to.
+--reference             a fasta containing the reference sequence the BAM file was aligned to.
 --output                the filename of the output VCF file
 --min-read-pos          minimum average relative distance from start/end of read 
 --min-var-freq          minimum variant allele frequency
