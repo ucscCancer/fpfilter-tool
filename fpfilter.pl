@@ -506,4 +506,7 @@ sub filter_sites_in_hash {
             die "Unknown site for rc\n";
         }
     }
+    unless($rc_results->close) {
+        die "Error running bam-readcount\n";
+    }
 }
