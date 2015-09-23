@@ -36,6 +36,7 @@ my $bam_file;
 my $bam_index;
 my $sample;
 my $bam_readcount_path = 'bam-readcount';
+my $samtools_path = 'samtools';
 my $ref_fasta;
 my $help;
 
@@ -49,6 +50,7 @@ $opt_result = GetOptions(
     'bam-index=s' => \$bam_index,
     'sample=s' => \$sample,
     'bam-readcount=s' => \$bam_readcount_path,
+    'bam-readcount=s' => \$samtools_path,
     'reference=s' => \$ref_fasta,
     'output=s'   => \$output_file,
     'min-read-pos=f' => \$min_read_pos,
@@ -138,7 +140,6 @@ my %rc_for_indel; #store info on indel positions and VCF line
 my ($workdir, $working_fasta, $working_bam) = setup_workdir($ref_fasta, $bam_file, $bam_index);
 
 my $starting_dir = cwd();
-chdir $workdir or die "Unable to change to working directory\n";
 
 my $input = IO::File->new($vcf_file) or die "Unable to open input file $vcf_file: $!\n";
 $vcf_header = parse_vcf_header($input);
@@ -205,14 +206,14 @@ while(my $entry = $input->getline) {
 }
 
 if(%rc_for_snp) {
-    filter_sites_in_hash(\%rc_for_snp, $bam_readcount_path, $working_bam, $working_fasta);
+    filter_sites_in_hash(\%rc_for_snp, $bam_readcount_path, $working_bam, $working_fasta, $workdir);
 }
 else {
     print STDERR "No SNP sites identified\n";
 }
 
 if(%rc_for_indel) {
-    filter_sites_in_hash(\%rc_for_indel, $bam_readcount_path, $working_bam, $working_fasta, '-i');
+    filter_sites_in_hash(\%rc_for_indel, $bam_readcount_path, $working_bam, $working_fasta, $workdir, '-i');
 }
 else {
     print STDERR "No Indel sites identified\n";
@@ -498,10 +499,10 @@ sub add_process_log_to_header {
 }
 
 sub filter_sites_in_hash {
-    my ($hash, $bam_readcount_path, $bam_file, $ref_fasta, $optional_param) = @_;
+    my ($hash, $bam_readcount_path, $bam_file, $ref_fasta, $working_dir, $optional_param) = @_;
     #done parsing vcf
     $optional_param ||= '';
-    my $list_name = "regions.txt";
+    my $list_name = File::Spec->catfile($working_dir, "regions.txt");
     my $list_fh = IO::File->new($list_name,"w") or die "Unable to open file for coordinates\n";
     generate_region_list($hash, $list_fh);
     $list_fh->close();
@@ -555,7 +556,7 @@ sub setup_workdir {
 
     my $fa_index = $reference . ".fai";
     unless(-e $fa_index) {
-        # do reference indexing
+        index_fasta($working_reference);
     }
     else {
         symlink $fa_index, File::Spec->catfile($dir, "reference.fa.fai");
@@ -571,8 +572,25 @@ sub setup_workdir {
         symlink $bam_file . ".bai", $working_bam_index;
     }
     else {
-        # index bam file
+        index_bam($working_bam);
     }
     return ($dir, $working_reference, $working_bam);
 }
 
+sub index_fasta {
+    my ($fasta) = @_;
+
+    print STDERR "Indexing fasta...\n";
+    my @args = ($samtools_path, "faidx", $fasta);
+    system(@args) == 0
+        or die "Unable to index $fasta: $?\n";
+}
+
+sub index_bam {
+    my ($bam) = @_;
+
+    print STDERR "Indexing BAM...\n";
+    my @args = ($samtools_path, "index", $bam);
+    system(@args) == 0
+        or die "Unable to index $bam: $?\n";
+}
