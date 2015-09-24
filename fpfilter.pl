@@ -5,6 +5,9 @@ use strict;
 
 use Getopt::Long;
 use IO::File;
+use File::Temp qw( tempdir );
+use File::Spec;
+use Cwd qw( abs_path cwd);
 
 ## Define filtering parameters ##
 
@@ -30,8 +33,10 @@ my $output_basename;
 my $vcf_file;
 my $output_file;
 my $bam_file;
+my $bam_index;
 my $sample;
 my $bam_readcount_path = 'bam-readcount';
+my $samtools_path = 'samtools';
 my $ref_fasta;
 my $help;
 
@@ -42,8 +47,10 @@ my @params = @ARGV;
 $opt_result = GetOptions(
     'vcf-file=s' => \$vcf_file,
     'bam-file=s' => \$bam_file,
+    'bam-index=s' => \$bam_index,
     'sample=s' => \$sample,
     'bam-readcount=s' => \$bam_readcount_path,
+    'bam-readcount=s' => \$samtools_path,
     'reference=s' => \$ref_fasta,
     'output=s'   => \$output_file,
     'min-read-pos=f' => \$min_read_pos,
@@ -85,10 +92,27 @@ unless(-s $ref_fasta) {
     die "Can not find valid reference fasta: $ref_fasta\n";
 }
 
+unless($bam_file) {
+    die "You must provide a BAM file for generating readcounts\n";
+    die help_text();
+}
+
+unless(-s $bam_file) {
+    die "Can not find valid BAM file: $bam_file\n";
+}
+
+if($bam_index && !-s $bam_index) {
+    die "Can not find valid BAM index file: $bam_index\n";
+}
+
 unless($output_file) {
     warn "You must provide an output file name: $output_file\n";
     die help_text();
 }
+else {
+    $output_file = abs_path($output_file); #make sure we have full path as manipulating cwd below
+}
+
 unless($sample) {
     warn "You must provide a sample name\n";
     die help_text();
@@ -112,6 +136,10 @@ my @vcf_lines;
 
 my %rc_for_snp; # store info on snp positions and VCF line
 my %rc_for_indel; #store info on indel positions and VCF line
+
+my ($workdir, $working_fasta, $working_bam) = setup_workdir($ref_fasta, $bam_file, $bam_index);
+
+my $starting_dir = cwd();
 
 my $input = IO::File->new($vcf_file) or die "Unable to open input file $vcf_file: $!\n";
 $vcf_header = parse_vcf_header($input);
@@ -178,14 +206,14 @@ while(my $entry = $input->getline) {
 }
 
 if(%rc_for_snp) {
-    filter_sites_in_hash(\%rc_for_snp, $bam_readcount_path, $bam_file, $ref_fasta);
+    filter_sites_in_hash(\%rc_for_snp, $bam_readcount_path, $working_bam, $working_fasta, $workdir);
 }
 else {
     print STDERR "No SNP sites identified\n";
 }
 
 if(%rc_for_indel) {
-    filter_sites_in_hash(\%rc_for_indel, $bam_readcount_path, $bam_file, $ref_fasta, '-i');
+    filter_sites_in_hash(\%rc_for_indel, $bam_readcount_path, $working_bam, $working_fasta, $workdir, '-i');
 }
 else {
     print STDERR "No Indel sites identified\n";
@@ -195,6 +223,8 @@ else {
 my $filtered_vcf = IO::File->new("$output_file","w") or die "Can't open output file $output_file: $!\n";
 print $filtered_vcf @$vcf_header;
 print $filtered_vcf @vcf_lines;
+
+chdir $starting_dir or die "Unable to go back to starting dir\n";
 exit(0);
 
 ################################################################################
@@ -248,7 +278,7 @@ OPTIONS
 --vcf-file              the input VCF file. Must have a GT field.
 --bam-file              the BAM file of the sample you are filtering on. Typically the tumor.
 --sample                the sample name of the sample you want to filter on in the VCF file.
---reference-sequence    a fasta containing the reference sequence the BAM file was aligned to.
+--reference             a fasta containing the reference sequence the BAM file was aligned to.
 --output                the filename of the output VCF file
 --min-read-pos          minimum average relative distance from start/end of read 
 --min-var-freq          minimum variant allele frequency
@@ -469,10 +499,10 @@ sub add_process_log_to_header {
 }
 
 sub filter_sites_in_hash {
-    my ($hash, $bam_readcount_path, $bam_file, $ref_fasta, $optional_param) = @_;
+    my ($hash, $bam_readcount_path, $bam_file, $ref_fasta, $working_dir, $optional_param) = @_;
     #done parsing vcf
     $optional_param ||= '';
-    my $list_name = "regions.txt";
+    my $list_name = File::Spec->catfile($working_dir, "regions.txt");
     my $list_fh = IO::File->new($list_name,"w") or die "Unable to open file for coordinates\n";
     generate_region_list($hash, $list_fh);
     $list_fh->close();
@@ -506,4 +536,61 @@ sub filter_sites_in_hash {
             die "Unknown site for rc\n";
         }
     }
+    unless($rc_results->close) {
+        die "Error running bam-readcount\n";
+    }
+}
+
+sub setup_workdir {
+    my ($reference, $bam_file, $bam_index) = @_;
+    $reference = abs_path($reference);
+    $bam_file = abs_path($bam_file);
+    $bam_index = abs_path($bam_index) if $bam_index;
+
+    my $dir = File::Temp->newdir('fpfilterXXXXX', TMPDIR => 1, CLEANUP => 1, DIR => './') or 
+        die "Unable to create working directory\n";
+
+    #symlink in necessary files to run
+    my $working_reference =  File::Spec->catfile($dir, "reference.fa");
+    symlink $reference, $working_reference;
+
+    my $fa_index = $reference . ".fai";
+    unless(-e $fa_index) {
+        index_fasta($working_reference);
+    }
+    else {
+        symlink $fa_index, File::Spec->catfile($dir, "reference.fa.fai");
+    }
+
+    my $working_bam = File::Spec->catfile($dir, "tumor.bam");
+    my $working_bam_index = File::Spec->catfile($dir, "tumor.bam.bai");
+    symlink $bam_file, $working_bam;
+    if($bam_index) {
+        symlink $bam_index, $working_bam_index;
+    }
+    elsif(-e $bam_file . ".bai") {
+        symlink $bam_file . ".bai", $working_bam_index;
+    }
+    else {
+        index_bam($working_bam);
+    }
+    return ($dir, $working_reference, $working_bam);
+}
+
+sub index_fasta {
+    my ($fasta) = @_;
+
+    print STDERR "Indexing fasta...\n";
+    my @args = ($samtools_path, "faidx", $fasta);
+    system(@args) == 0
+        or die "Unable to index $fasta: $?\n";
+}
+
+sub index_bam {
+    my ($bam) = @_;
+
+    print STDERR "Indexing BAM...\n";
+    my @args = ($samtools_path, "index", $bam);
+    system(@args) == 0
+        or die "Unable to index $bam: $?\n";
 }
