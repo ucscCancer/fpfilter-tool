@@ -547,7 +547,7 @@ sub setup_workdir {
     $bam_file = abs_path($bam_file);
     $bam_index = abs_path($bam_index) if $bam_index;
 
-    my $dir = File::Temp->newdir('fpfilterXXXXX', TMPDIR => 1, CLEANUP => 1) or 
+    my $dir = File::Temp->newdir('fpfilterXXXXX', TMPDIR => 1, CLEANUP => 1, DIR => './') or 
         die "Unable to create working directory\n";
 
     #symlink in necessary files to run
