@@ -43,7 +43,7 @@ fpfilter.pl
   </inputs>
 
   <outputs>
-    <data format="vcf" name="output" label="Filtered VCF" />
+    <data format="vcf" name="output" label="FP Filtered VCF" />
   </outputs>
   <stdio>
     <exit_code range="1:" level="fatal" />
