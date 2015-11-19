@@ -1,0 +1,87 @@
+
+class: CommandLineTool
+label: FPFilter
+baseCommand: [perl, /opt/fpfilter.pl]
+requirements:
+  - class: "DockerRequirement"
+    dockerImageId: "fpfilter:1.0"
+
+inputs:
+  - id: "#vcf_file"
+    type: File
+    inputBinding:
+      prefix: --vcf-file
+
+  - id: "#bam_file"
+    type: File
+    inputBinding:
+      prefix: --bam-file
+
+  - id: "#reference"
+    type: File
+    inputBinding:
+      prefix: --reference
+
+  - id: "#sample"
+    type: string
+    inputBinding:
+      prefix: --sample
+
+  - id: "#min_read_pos"
+    type: integer
+    inputBinding:
+      prefix: --min-read-pos
+
+  - id: "#min_var_freq"
+    type: float
+    inputBinding:
+      prefix: --min-var-freq
+      
+  - id: "#min_var_count"
+    type: integer
+    inputBinding:
+      prefix: --min-var-count
+
+  - id: "#min_strandness"
+    type: string
+    inputBinding:
+      prefix: --min-strandedness
+
+  - id: "#max_mm_qualsum_diff"
+    type: integer
+    inputBinding:
+      prefix: --max-mm-qualsum-diff
+
+  - id: "#max_var_mm_qualsum"
+    type: integer
+    inputBinding:
+      prefix: --max_var_mm_qualsum
+      
+  - id: "#max_mapqual_diff"
+    type: integer
+    inputBinding:
+      prefix: --max-mapqual-diff
+      
+  - id: "#max_readlen_diff"
+    type: integer
+    inputBinding:
+      prefix: --max-readlen-diff
+      
+  - id: "#min_var_dist_3"
+    type: integer
+    inputBinding:
+      prefix: --min-var-dist-3 
+
+  - id: "#output"
+    type: string
+    default: filtered.vcf
+    inputBinding:
+      prefix: --output
+  
+outputs:
+  - id: "output"
+    type: File
+    outputBinding:
+      glob:
+        engine: "cwl:JsonPointer"
+        script: job/output
