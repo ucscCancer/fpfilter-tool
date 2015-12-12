@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 class: CommandLineTool
 label: fpfilter
 baseCommand: [perl, /opt/fpfilter.pl, --output, fpfilter.vcf]
@@ -86,10 +87,16 @@ inputs:
     default: 0.20
     inputBinding:
       prefix: --min-var-dist-3
-
-outputs:
   - id: "#output"
+    type: string
+    default: filtered.vcf
+    inputBinding:
+      prefix: --output
+  
+outputs:
+  - id: "output"
     type: File
-    description: the filename of the output VCF file
     outputBinding:
-      glob: fpfilter.vcf
+      glob:
+        engine: "cwl:JsonPointer"
+        script: job/output
