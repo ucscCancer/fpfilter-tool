@@ -1,4 +1,4 @@
-FROM ubuntu
+FROM ubuntu:12.04
 
 RUN apt-get update
 RUN apt-get install -y wget build-essential git-core cmake zlib1g-dev libncurses-dev
