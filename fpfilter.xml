@@ -1,7 +1,7 @@
 <tool id="fpfilter" name="fpfilter" version="0.0.1">
   <description></description>
   <requirements>
-    <container type="docker">fpfilter:0.0.1</container>
+    <container type="docker">opengenomics/fpfilter:0.0.1</container>
   </requirements>
   <command interpreter="perl">
 fpfilter.pl

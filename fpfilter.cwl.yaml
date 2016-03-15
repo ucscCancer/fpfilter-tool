@@ -3,7 +3,7 @@ label: fpfilter
 baseCommand: [perl, /opt/fpfilter.pl, --output, fpfilter.vcf]
 requirements:
   - class: "DockerRequirement"
-    dockerImageId: "fpfilter:0.0.1"
+    dockerImageId: "opengenomics/fpfilter:0.0.1"
 inputs:
   - id: "#vcf-file"
     type: File
