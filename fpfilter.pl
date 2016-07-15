@@ -50,7 +50,7 @@ $opt_result = GetOptions(
     'bam-index=s' => \$bam_index,
     'sample=s' => \$sample,
     'bam-readcount=s' => \$bam_readcount_path,
-    'bam-readcount=s' => \$samtools_path,
+    'samtools=s' => \$samtools_path,
     'reference=s' => \$ref_fasta,
     'output=s'   => \$output_file,
     'min-read-pos=f' => \$min_read_pos,
