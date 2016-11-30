@@ -1,0 +1,101 @@
+class: CommandLineTool
+label: fpfilter
+baseCommand: [perl, /opt/fpfilter.pl, --output, fpfilter.vcf]
+requirements:
+  - class: "DockerRequirement"
+    dockerImageId: "opengenomics/fpfilter:0.0.1"
+inputs:
+  - id: "#vcf-file"
+    type: File
+    description: the input VCF file. Must have a GT field.
+    inputBinding:
+      prefix: --vcf-file
+  - id: "#bam-file"
+    type: File
+    description: the BAM file of the sample you are filtering on. Typically the tumor.
+    inputBinding:
+      prefix: --bam-file
+      secondaryFiles:
+        - .bai
+  - id: "#sample"
+    type: string
+    description: The sample name of the sample you want to filter on in the VCF file.
+    default: "TUMOR"
+    inputBinding:
+      prefix: --sample
+  - id: "#reference"
+    type: File
+    description: a fasta containing the reference sequence the BAM file was aligned to.
+    inputBinding:
+      prefix: --reference
+  - id: "#output"
+    type: File
+    inputBinding:
+      prefix: --output
+  - id: "#min-read-pos"
+    type: float
+    description: minimum average relative distance from start/end of read
+    default: 0.10
+    inputBinding:
+      prefix: --min-read-pos
+  - id: "#min-var-freq"
+    type: float
+    default: 0.05
+    default: minimum variant allele frequency
+    inputBinding:
+      prefix: --min-var-freq
+  - id: "#min-var-count"
+    type: integer
+    description: minimum number of variant-supporting reads
+    default: 4
+    inputBinding:
+      prefix: --min-var-count
+  - id: "#min-strandedness"
+    type: float
+    default: 0.01
+    description: minimum representation of variant allele on each strand
+    inputBinding:
+      prefix: --min-strandedness
+  - id: "#max-mm-qualsum-diff"
+    type: integer
+    default: 50
+    description: maximum difference of mismatch quality sum between variant and reference reads (paralog filter)
+    inputBinding:
+      prefix: --max-mm-qualsum-diff
+  - id: "#max-var-mm-qualsum"
+    type: integer
+    description: maximum mismatch quality sum of reference-supporting reads
+    default: 100
+    inputBinding:
+      prefix: --max-var-mm-qualsum
+  - id: "#max-mapqual-diff"
+    type: integer
+    description: maximum difference of mapping quality between variant and reference reads
+    default: 30
+    inputBinding:
+      prefix: --max-mapqual-diff
+  - id: "#max-readlen-diff"
+    type: integer
+    description: maximum difference of average supporting read length between variant and reference reads (paralog filter)
+    default: 25
+    inputBinding:
+      prefix: --max-readlen-diff
+  - id: "#min-var-dist-3"
+    type: integer
+    description: minimum average distance to effective 3prime end of read (real end or Q2) for variant-supporting reads
+    default: 0.20
+    inputBinding:
+      prefix: --min-var-dist-3
+  - id: "#output"
+    type: string
+    default: filtered.vcf
+    inputBinding:
+      prefix: --output
+  
+outputs:
+  - id: "output"
+    type: File
+    outputBinding:
+      glob:
+        engine: "cwl:JsonPointer"
+        script: job/output

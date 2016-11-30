@@ -61,7 +61,7 @@ $opt_result = GetOptions(
     'max-mapqual-diff=f' => \$max_mapqual_diff,
     'max-readlen-diff=f' => \$max_readlen_diff,
     'min-var-dist-3=f' => \$min_var_dist_3,
-    'max_var_mm_qualsum=f' => \$max_var_mm_qualsum,
+    'max-var-mm-qualsum=f' => \$max_var_mm_qualsum,
     'help' => \$help,
 );
 
